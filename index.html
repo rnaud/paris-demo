@@ -53,27 +53,30 @@ function line3d(x1,y1,z1,x2,y2,z2) {
 }
 
 // ─── STARS ───────────────────────────────────────────────────────────────────
-const STARS = Array.from({length:550}, () => ({
+const STARS = Array.from({length:180}, () => ({
   x:(Math.random()-0.5)*2800, y:50+Math.random()*500,
   z:(Math.random()-0.5)*2800, tw:Math.random()*Math.PI*2,
-  r:Math.random()*2.2+0.7, hue:190+Math.random()*80
+  r:Math.random()*2+0.8, hue:190+Math.random()*80
 }));
 
 function drawStars(alpha, t) {
   STARS.forEach(s => {
     const p=project(s.x,s.y,s.z); if(!p||p.z>1600) return;
     const tw=0.55+0.45*Math.sin(s.tw+t*2.2);
-    ctx.shadowColor=`hsl(${s.hue},70%,92%)`; ctx.shadowBlur=5;
-    ctx.fillStyle=`hsla(${s.hue},65%,93%,${alpha*tw*0.95})`;
-    ctx.beginPath(); ctx.arc(p.x,p.y,s.r*clamp(1-p.z/1600,0.3,1),0,Math.PI*2); ctx.fill();
+    const r=s.r*clamp(1-p.z/1600,0.3,1);
+    // Soft halo without shadowBlur: large dim circle + bright core
+    ctx.fillStyle=`hsla(${s.hue},50%,80%,${alpha*tw*0.25})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r*2.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=`hsla(${s.hue},65%,95%,${alpha*tw*0.9})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
   });
-  ctx.shadowBlur=0;
 }
 
 // ─── PARTICLES ───────────────────────────────────────────────────────────────
 class PS {
   constructor() { this.p=[]; }
   spawn(x,y,z,o={}) {
+    if(this.p.length>50) return;  // cap — don't let the buffer grow unbounded
     this.p.push({
       x,y,z,
       vx:(Math.random()-0.5)*(o.spread||10),
@@ -94,11 +97,13 @@ class PS {
     this.p.forEach(p=>{
       const pt=project(p.x,p.y,p.z); if(!pt) return;
       const a=p.life*p.alpha*ga;
-      ctx.shadowBlur=14; ctx.shadowColor=`hsl(${p.hue},${p.sat}%,${p.lit}%)`;
+      const r=Math.max(1,p.r);
+      // Glow without shadowBlur: outer dim halo + bright core
+      ctx.fillStyle=`hsla(${p.hue},${p.sat}%,${p.lit}%,${a*0.2})`;
+      ctx.beginPath(); ctx.arc(pt.x,pt.y,r*3,0,Math.PI*2); ctx.fill();
       ctx.fillStyle=`hsla(${p.hue},${p.sat}%,${p.lit}%,${a})`;
-      ctx.beginPath(); ctx.arc(pt.x,pt.y,Math.max(1,p.r),0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(pt.x,pt.y,r,0,Math.PI*2); ctx.fill();
     });
-    ctx.shadowBlur=0;
   }
 }
 const embers=new PS(), mist=new PS(), sparks=new PS();
@@ -185,21 +190,12 @@ function buildTower() {
 const TOWER_SEGS=buildTower();
 
 function drawTower(hue, alpha, glow) {
-  // Pass 1 — wide diffuse glow
-  ctx.lineWidth=6; ctx.strokeStyle=`hsla(${hue},100%,60%,${alpha*0.15})`;
-  ctx.shadowColor=`hsl(${hue},100%,55%)`; ctx.shadowBlur=glow*2.8;
+  // Pass 1 — wide soft glow (thick transparent lines, no shadowBlur)
+  ctx.lineWidth=7; ctx.strokeStyle=`hsla(${hue},100%,62%,${alpha*0.10})`;
   TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>line3d(x1,y1,z1,x2,y2,z2));
-
-  // Pass 2 — medium glow
-  ctx.lineWidth=2.8; ctx.strokeStyle=`hsla(${hue},100%,68%,${alpha*0.55})`;
-  ctx.shadowBlur=glow*1.3;
+  // Pass 2 — crisp bright core
+  ctx.lineWidth=1.8; ctx.strokeStyle=`hsla(${hue},85%,92%,${alpha})`;
   TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>line3d(x1,y1,z1,x2,y2,z2));
-
-  // Pass 3 — crisp core
-  ctx.lineWidth=1.6; ctx.strokeStyle=`hsla(${hue},85%,90%,${alpha})`;
-  ctx.shadowBlur=glow*0.5;
-  TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>line3d(x1,y1,z1,x2,y2,z2));
-  ctx.shadowBlur=0;
 }
 
 // ─── CITY SILHOUETTE ─────────────────────────────────────────────────────────
@@ -297,14 +293,11 @@ function drawSky(pal) {
 function drawMoon(alpha) {
   const p=project(185,185,-520); if(!p) return;
   const r=Math.max(22,p.scale*22);
-  // Halo
-  ctx.beginPath(); ctx.arc(p.x,p.y,r*2.2,0,Math.PI*2);
-  ctx.fillStyle=`rgba(235,218,182,${alpha*0.07})`; ctx.fill();
+  // Layered halos — no shadowBlur
+  ctx.fillStyle=`rgba(235,218,182,${alpha*0.04})`; ctx.beginPath(); ctx.arc(p.x,p.y,r*3.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=`rgba(240,228,195,${alpha*0.08})`; ctx.beginPath(); ctx.arc(p.x,p.y,r*2.2,0,Math.PI*2); ctx.fill();
   // Disc
-  ctx.shadowColor='rgba(255,245,210,0.75)'; ctx.shadowBlur=28;
-  ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2);
-  ctx.fillStyle=`rgba(250,240,215,${alpha*0.93})`; ctx.fill();
-  ctx.shadowBlur=0;
+  ctx.fillStyle=`rgba(250,240,215,${alpha*0.93})`; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
 }
 
 // ─── FOG ─────────────────────────────────────────────────────────────────────
@@ -333,7 +326,6 @@ class StoryText {
     if(this.a<0.01) return;
     ctx.textAlign='center';
     const fs=Math.min(W*0.047,33);
-    ctx.shadowColor='rgba(175,110,255,0.85)'; ctx.shadowBlur=26;
     let y=H*0.70;
 
     if(this.l1){
@@ -351,7 +343,7 @@ class StoryText {
       ctx.fillStyle=`rgba(172,148,215,${this.a*0.58})`;
       ctx.fillText(this.sub,W/2,y);
     }
-    ctx.shadowBlur=0; ctx.textAlign='left';
+    ctx.textAlign='left';
   }
 }
 const story=new StoryText();
@@ -379,7 +371,6 @@ function drawTitle(alpha){
   if(alpha<0.01) return;
   ctx.textAlign='center';
   const fs=Math.min(W*0.062,44);
-  ctx.shadowColor=`rgba(195,110,255,${alpha*0.85})`; ctx.shadowBlur=50;
   ctx.font=`100 ${fs*0.37}px Georgia,serif`; ctx.letterSpacing='7px';
   ctx.fillStyle=`rgba(188,165,228,${alpha*0.55})`;
   ctx.fillText('NICOLAS / OPENCLAW PRODUCTIONS PRESENTS',W/2,H*0.18);
@@ -387,10 +378,9 @@ function drawTitle(alpha){
   ctx.fillStyle=`rgba(248,228,255,${alpha})`;
   ctx.fillText('DREAM OF PARIS',W/2,H*0.28);
   ctx.font=`200 ${fs*0.37}px Georgia,serif`; ctx.letterSpacing='5px';
-  ctx.shadowBlur=0;
   ctx.fillStyle=`rgba(172,152,218,${alpha*0.62})`;
   ctx.fillText('A JOURNEY IN SEVEN MOVEMENTS',W/2,H*0.36);
-  ctx.textAlign='left'; ctx.shadowBlur=0;
+  ctx.textAlign='left';
 }
 
 // ─── SCENE DEFINITIONS ───────────────────────────────────────────────────────
@@ -464,24 +454,24 @@ function setCam(S, t){
 // ─── AMBIENT PARTICLE SPAWNER ────────────────────────────────────────────────
 function spawnAmbient(name){
   if(name==='tower'||name==='minuit'){
-    if(Math.random()<0.65) embers.spawn(
+    if(Math.random()<0.3) embers.spawn(
       (Math.random()-0.5)*65,-80,(Math.random()-0.5)*65,
-      {vy:-4.5-Math.random()*4.5,spread:6,decay:0.005,r:2.2+Math.random()*2.5,
+      {vy:-4.5-Math.random()*4.5,spread:6,decay:0.007,r:2.2+Math.random()*2.5,
        hue:45+Math.random()*20,sat:100,lit:88,alpha:0.95});
   }
   if(name==='aube'){
-    if(Math.random()<0.35) embers.spawn(
+    if(Math.random()<0.15) embers.spawn(
       (Math.random()-0.5)*260,28+Math.random()*55,(Math.random()-0.5)*260,
-      {vy:-1.8,spread:9,decay:0.0028,r:1.8+Math.random()*2.8,
+      {vy:-1.8,spread:9,decay:0.005,r:1.8+Math.random()*2.8,
        hue:32+Math.random()*32,sat:92,lit:80});
   }
-  if(Math.random()<0.09) mist.spawn(
+  if(Math.random()<0.04) mist.spawn(
     (Math.random()-0.5)*450,-76+Math.random()*32,(Math.random()-0.5)*450,
-    {vy:-0.18,spread:2.5,decay:0.0012,r:14+Math.random()*20,
+    {vy:-0.18,spread:2.5,decay:0.003,r:14+Math.random()*20,
      hue:220,sat:22,lit:78,alpha:0.065});
-  if(name==='minuit'&&Math.random()<0.28) sparks.spawn(
+  if(name==='minuit'&&Math.random()<0.12) sparks.spawn(
     (Math.random()-0.5)*28,18+Math.random()*105,(Math.random()-0.5)*28,
-    {vy:-11-Math.random()*11,spread:20,decay:0.016,r:1.3,
+    {vy:-11-Math.random()*11,spread:20,decay:0.022,r:1.3,
      hue:55+Math.random()*28,sat:100,lit:98});
 }
 

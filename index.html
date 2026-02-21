@@ -24,7 +24,7 @@ window.addEventListener('resize', resize);
 // ─── MATH ────────────────────────────────────────────────────────────────────
 const lerp = (a,b,t) => a + (b-a)*t;
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
-const ease = t => t<0.5 ? 2*t*t : -1+(4-2*t)*t;
+const ease = t => t;  // linear — camera moves at constant pace, always visible
 const smoothstep = (a,b,t) => { const x=clamp((t-a)/(b-a),0,1); return x*x*(3-2*x); };
 
 // ─── CAMERA ──────────────────────────────────────────────────────────────────
@@ -395,46 +395,46 @@ function drawTitle(alpha){
 
 // ─── SCENE DEFINITIONS ───────────────────────────────────────────────────────
 const SCENES=[
-  { dur:18, name:'overture',
+  { dur:10, name:'overture',
     l1:'Paris.',               l2:'Été 1997.',         sub:'A dream she had forgotten to finish.',
-    cam:    {x:0,   y:200,z:580,tx:0,ty:0, tz:0,fov:350},
-    camEnd: {x:0,   y:80, z:390,tx:0,ty:30,tz:0,fov:400},
+    cam:    {x:0,   y:380,z:700,tx:0,ty:0,  tz:0,  fov:300},
+    camEnd: {x:0,   y:55, z:320,tx:0,ty:35, tz:0,  fov:440},
     sky:[265,55,10], tower:278, grid:262, fog:0.48, glow:16 },
 
-  { dur:20, name:'arrival',
+  { dur:12, name:'arrival',
     l1:'She had not been back', l2:'in seven years.',  sub:'The city remembered.',
-    cam:    {x:125, y:180,z:375,tx:0,ty:20,tz:0,fov:380},
-    camEnd: {x:62,  y:60, z:275,tx:0,ty:30,tz:0,fov:425},
+    cam:    {x:280, y:220,z:420,tx:0,ty:20, tz:0,  fov:340},
+    camEnd: {x:40,  y:40, z:210,tx:0,ty:45, tz:0,  fov:480},
     sky:[222,62,12], tower:205, grid:222, fog:0.38, glow:10 },
 
-  { dur:22, name:'tower',
+  { dur:14, name:'tower',
     l1:'La Dame de Fer.',       l2:'Iron Lady. Still standing.', sub:'As if she had never left.',
-    cam:    {x:135, y:18, z:198,tx:0,ty:42,tz:0,fov:510},
-    camEnd: {x:-135,y:52, z:198,tx:0,ty:42,tz:0,fov:490},
+    cam:    {x:220, y:10, z:220,tx:0,ty:50, tz:0,  fov:520},
+    camEnd: {x:-220,y:80, z:180,tx:0,ty:30, tz:0,  fov:460},
     sky:[262,72,8],  tower:48,  grid:268, fog:0.33, glow:28 },
 
-  { dur:18, name:'seine',
+  { dur:11, name:'seine',
     l1:'The Seine carries everything', l2:'to the sea.', sub:'Memories. Tears. Tuesday afternoons.',
-    cam:    {x:-85, y:-36,z:178,tx:0,ty:10,tz:-72,fov:462},
-    camEnd: {x:85,  y:-26,z:178,tx:0,ty:10,tz:-72,fov:462},
+    cam:    {x:-180,y:-50,z:220,tx:0,ty:0,  tz:-80,fov:440},
+    camEnd: {x:180, y:-20,z:160,tx:0,ty:15, tz:-80,fov:500},
     sky:[205,57,10], tower:198, grid:205, fog:0.42, glow:9  },
 
-  { dur:20, name:'minuit',
+  { dur:12, name:'minuit',
     l1:'At midnight, Paris',    l2:'holds its breath.', sub:'The tower wears its sparks like jewels.',
-    cam:    {x:0,   y:-22,z:258,tx:0,ty:62,tz:0,fov:505},
-    camEnd: {x:32,  y:12, z:238,tx:0,ty:72,tz:0,fov:485},
+    cam:    {x:60,  y:-60,z:280,tx:0,ty:80, tz:0,  fov:520},
+    camEnd: {x:-80, y:30, z:200,tx:0,ty:60, tz:0,  fov:460},
     sky:[250,88,6],  tower:55,  grid:250, fog:0.38, glow:40 },
 
-  { dur:18, name:'aube',
+  { dur:10, name:'aube',
     l1:'But cities forgive.',   l2:'They always do.',  sub:'Dawn breaks gold over the arrondissements.',
-    cam:    {x:0,   y:82, z:248,tx:0,ty:42,tz:0,fov:422},
-    camEnd: {x:42,  y:102,z:398,tx:0,ty:32,tz:0,fov:382},
+    cam:    {x:-80, y:60, z:220,tx:0,ty:50, tz:0,  fov:480},
+    camEnd: {x:120, y:160,z:520,tx:0,ty:20, tz:0,  fov:340},
     sky:[28,78,15],  tower:38,  grid:38,  fog:0.32, glow:20 },
 
-  { dur:16, name:'fin',
+  { dur:10, name:'fin',
     l1:'À bientôt,',            l2:'Paris.',            sub:'Until the next dream.',
-    cam:    {x:82,  y:152,z:498,tx:0,ty:32,tz:0,fov:362},
-    camEnd: {x:0,   y:202,z:698,tx:0,ty:0, tz:0,fov:322},
+    cam:    {x:100, y:180,z:460,tx:0,ty:40, tz:0,  fov:380},
+    camEnd: {x:0,   y:300,z:820,tx:0,ty:0,  tz:0,  fov:300},
     sky:[265,52,11], tower:280, grid:265, fog:0.52, glow:10 },
 ];
 
@@ -452,8 +452,8 @@ function getScene(){
 
 function setCam(S, t){
   const f=ease(t);
-  cam.x  =lerp(S.cam.x,  S.camEnd.x,  f)+Math.sin(totalT*0.17)*7;
-  cam.y  =lerp(S.cam.y,  S.camEnd.y,  f)+Math.cos(totalT*0.13)*4;
+  cam.x  =lerp(S.cam.x,  S.camEnd.x,  f)+Math.sin(totalT*0.55)*22;
+  cam.y  =lerp(S.cam.y,  S.camEnd.y,  f)+Math.cos(totalT*0.42)*12;
   cam.z  =lerp(S.cam.z,  S.camEnd.z,  f);
   cam.tx =lerp(S.cam.tx, S.camEnd.tx, f);
   cam.ty =lerp(S.cam.ty, S.camEnd.ty, f);

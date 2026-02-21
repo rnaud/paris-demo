@@ -21,601 +21,536 @@ function resize() { W = c.width = window.innerWidth; H = c.height = window.inner
 resize();
 window.addEventListener('resize', resize);
 
-// ─── MATH HELPERS ────────────────────────────────────────────────────────────
+// ─── MATH ────────────────────────────────────────────────────────────────────
 const lerp = (a,b,t) => a + (b-a)*t;
-const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 const ease = t => t<0.5 ? 2*t*t : -1+(4-2*t)*t;
-const easeIn = t => t*t*t;
-const easeOut = t => 1 - Math.pow(1-t,3);
 const smoothstep = (a,b,t) => { const x=clamp((t-a)/(b-a),0,1); return x*x*(3-2*x); };
 
 // ─── CAMERA ──────────────────────────────────────────────────────────────────
-// Camera state: position (cx,cy,cz), look target (tx,ty,tz), fov
-const cam = { x:0, y:60, z:350, tx:0, ty:40, tz:0, fov:420,
-              shake:0, rotZ:0 };
+const cam = { x:0, y:60, z:350, tx:0, ty:40, tz:0, fov:420 };
 
 function project(wx, wy, wz) {
-  // Translate relative to camera
-  let dx = wx - cam.x, dy = wy - cam.y, dz = wz - cam.z;
-
-  // Look direction vector
-  const lvx = cam.tx - cam.x, lvy = cam.ty - cam.y, lvz = cam.tz - cam.z;
-  const ld = Math.sqrt(lvx*lvx + lvy*lvy + lvz*lvz) || 1;
-  const lx = lvx/ld, ly = lvy/ld, lz = lvz/ld;
-
-  // Right vector (cross look × world-up)
-  let rx = lz, ry = 0, rz = -lx;
-  const rm = Math.sqrt(rx*rx+rz*rz) || 1; rx/=rm; rz/=rm;
-
-  // Up vector
-  const ux = ly*rz - lz*ry;
-  const uy = lz*rx - lx*rz;
-  const uz = lx*ry - ly*rx;
-
-  // Project into camera space
-  const cx2 = dx*rx + dy*ry + dz*rz;
-  const cy2 = dx*ux + dy*uy + dz*uz;
-  const cz2 = dx*lx + dy*ly + dz*lz;
-
-  if (cz2 <= 2) return null;
-  const scale = cam.fov / cz2;
-
-  // Camera shake
-  const shX = cam.shake * (Math.random()-0.5) * 4;
-  const shY = cam.shake * (Math.random()-0.5) * 4;
-
-  // Camera roll
-  const cos = Math.cos(cam.rotZ), sin = Math.sin(cam.rotZ);
-  const sx = cx2*cos - cy2*sin;
-  const sy = cx2*sin + cy2*cos;
-
-  return {
-    x: W/2 + sx * scale + shX,
-    y: H/2 - sy * scale + shY,
-    z: cz2, scale
-  };
+  const dx=wx-cam.x, dy=wy-cam.y, dz=wz-cam.z;
+  const lvx=cam.tx-cam.x, lvy=cam.ty-cam.y, lvz=cam.tz-cam.z;
+  const ld=Math.sqrt(lvx*lvx+lvy*lvy+lvz*lvz)||1;
+  const lx=lvx/ld, ly=lvy/ld, lz=lvz/ld;
+  let rx=lz, ry=0, rz=-lx;
+  const rm=Math.sqrt(rx*rx+rz*rz)||1; rx/=rm; rz/=rm;
+  const ux=ly*rz-lz*ry, uy=lz*rx-lx*rz, uz=lx*ry-ly*rx;
+  const cx2=dx*rx+dy*ry+dz*rz;
+  const cy2=dx*ux+dy*uy+dz*uz;
+  const cz2=dx*lx+dy*ly+dz*lz;
+  if(cz2<=2) return null;
+  const sc=cam.fov/cz2;
+  return { x:W/2+cx2*sc, y:H/2-cy2*sc, z:cz2, scale:sc };
 }
 
 function line3d(x1,y1,z1,x2,y2,z2) {
-  const a = project(x1,y1,z1), b = project(x2,y2,z2);
-  if (!a||!b) return;
+  const a=project(x1,y1,z1), b=project(x2,y2,z2);
+  if(!a||!b) return;
   ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
 }
 
-function dot3d(x,y,z,r) {
-  const p = project(x,y,z);
-  if(!p) return null;
-  ctx.beginPath(); ctx.arc(p.x,p.y,r*p.scale*0.005+r*0.5,0,Math.PI*2); ctx.fill();
-  return p;
-}
-
 // ─── STARS ───────────────────────────────────────────────────────────────────
-const STARS = Array.from({length:400},()=>({
-  x:(Math.random()-0.5)*3000, y:(Math.random()-0.5)*800-100,
-  z:(Math.random()-0.5)*3000, twinkle:Math.random()*Math.PI*2,
-  r:Math.random()*2+0.5, hue:Math.random()*60+200
+const STARS = Array.from({length:550}, () => ({
+  x:(Math.random()-0.5)*2800, y:50+Math.random()*500,
+  z:(Math.random()-0.5)*2800, tw:Math.random()*Math.PI*2,
+  r:Math.random()*2.2+0.7, hue:190+Math.random()*80
 }));
 
 function drawStars(alpha, t) {
-  STARS.forEach(s=>{
-    const p = project(s.x,s.y,s.z); if(!p||p.z>1500) return;
-    const tw = 0.6+0.4*Math.sin(s.twinkle+t*2.5);
-    const bright = Math.floor(180*tw);
-    ctx.fillStyle = `hsla(${s.hue},60%,${Math.floor(60+bright*0.3)}%,${alpha*tw})`;
-    const r = s.r*(1-clamp(p.z/1500,0,1)*0.7);
-    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+  STARS.forEach(s => {
+    const p=project(s.x,s.y,s.z); if(!p||p.z>1600) return;
+    const tw=0.55+0.45*Math.sin(s.tw+t*2.2);
+    ctx.shadowColor=`hsl(${s.hue},70%,92%)`; ctx.shadowBlur=5;
+    ctx.fillStyle=`hsla(${s.hue},65%,93%,${alpha*tw*0.95})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,s.r*clamp(1-p.z/1600,0.3,1),0,Math.PI*2); ctx.fill();
   });
+  ctx.shadowBlur=0;
 }
 
 // ─── PARTICLES ───────────────────────────────────────────────────────────────
-class ParticleSystem {
-  constructor() { this.particles = []; }
-  spawn(x,y,z,opts={}) {
-    this.particles.push({
+class PS {
+  constructor() { this.p=[]; }
+  spawn(x,y,z,o={}) {
+    this.p.push({
       x,y,z,
-      vx:(Math.random()-0.5)*(opts.spread||10),
-      vy:opts.vy!==undefined?opts.vy:Math.random()*5+2,
-      vz:(Math.random()-0.5)*(opts.spread||10),
-      life:1, decay:opts.decay||0.008+Math.random()*0.005,
-      r:opts.r||2+Math.random()*3,
-      hue:opts.hue||50, sat:opts.sat||100, lit:opts.lit||70,
-      alpha:opts.alpha||1
+      vx:(Math.random()-0.5)*(o.spread||10),
+      vy:o.vy!==undefined?o.vy:Math.random()*5+2,
+      vz:(Math.random()-0.5)*(o.spread||10),
+      life:1, decay:o.decay||0.007+Math.random()*0.005,
+      r:o.r||2+Math.random()*3,
+      hue:o.hue||50, sat:o.sat||100, lit:o.lit||75, alpha:o.alpha||1
     });
   }
   update() {
-    this.particles = this.particles.filter(p=>{
+    this.p=this.p.filter(p=>{
       p.x+=p.vx*0.3; p.y+=p.vy*0.3; p.z+=p.vz*0.3;
-      p.vy+=0.05; // gravity
-      p.life-=p.decay; return p.life>0;
+      p.vy+=0.04; p.life-=p.decay; return p.life>0;
     });
   }
-  draw(globalAlpha=1) {
-    this.particles.forEach(p=>{
-      const pt = project(p.x,p.y,p.z); if(!pt) return;
-      const a = p.life*p.alpha*globalAlpha;
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = `hsl(${p.hue},${p.sat}%,${p.lit}%)`;
-      ctx.fillStyle = `hsla(${p.hue},${p.sat}%,${p.lit}%,${a})`;
-      const r = p.r*(1+pt.scale*0.002);
-      ctx.beginPath(); ctx.arc(pt.x,pt.y,Math.max(0.5,r),0,Math.PI*2); ctx.fill();
+  draw(ga=1) {
+    this.p.forEach(p=>{
+      const pt=project(p.x,p.y,p.z); if(!pt) return;
+      const a=p.life*p.alpha*ga;
+      ctx.shadowBlur=14; ctx.shadowColor=`hsl(${p.hue},${p.sat}%,${p.lit}%)`;
+      ctx.fillStyle=`hsla(${p.hue},${p.sat}%,${p.lit}%,${a})`;
+      ctx.beginPath(); ctx.arc(pt.x,pt.y,Math.max(1,p.r),0,Math.PI*2); ctx.fill();
     });
     ctx.shadowBlur=0;
   }
 }
-const embers = new ParticleSystem();
-const mist   = new ParticleSystem();
-const sparks  = new ParticleSystem();
+const embers=new PS(), mist=new PS(), sparks=new PS();
 
 // ─── EIFFEL TOWER ────────────────────────────────────────────────────────────
 function buildTower() {
-  // Returns array of line segments [x1,y1,z1,x2,y2,z2]
-  const segs = [];
-  const add = (x1,y1,z1,x2,y2,z2) => segs.push([x1,y1,z1,x2,y2,z2]);
+  const segs=[], add=(x1,y1,z1,x2,y2,z2)=>segs.push([x1,y1,z1,x2,y2,z2]);
+  const N=14;
+  const dirs=[{dx:1,dz:1},{dx:1,dz:-1},{dx:-1,dz:1},{dx:-1,dz:-1}];
 
-  // Ground level Y = -80 (tower base), top ~= +140
-  // ── Legs: 4 curved pillars ──
-  const legSteps = 10;
-  const dirs = [{dx:1,dz:1},{dx:1,dz:-1},{dx:-1,dz:1},{dx:-1,dz:-1}];
+  // Curved legs
   dirs.forEach(({dx,dz})=>{
-    for(let i=0;i<legSteps;i++){
-      const f1=i/legSteps, f2=(i+1)/legSteps;
-      // Curved: wide at base, narrows with slight inward curve
-      const curve1 = Math.pow(1-f1,1.5);
-      const curve2 = Math.pow(1-f2,1.5);
-      add(dx*58*curve1,-80+65*f1,dz*58*curve1, dx*58*curve2,-80+65*f2,dz*58*curve2);
+    for(let i=0;i<N;i++){
+      const f1=i/N, f2=(i+1)/N;
+      const c1=Math.pow(1-f1,1.5), c2=Math.pow(1-f2,1.5);
+      add(dx*60*c1,-80+65*f1,dz*60*c1, dx*60*c2,-80+65*f2,dz*60*c2);
     }
     // Cross-braces
-    for(let i=0;i<5;i++){
-      const f=i/5+0.1;
-      const cc=Math.pow(1-f,1.5);
-      add(dx*58*cc,-80+65*f,dz*58*cc, dx*58*cc*0.3,-80+65*f,dz*58*cc*0.3);
+    for(let i=0;i<8;i++){
+      const f=i/8+0.06, cc=Math.pow(1-f,1.5);
+      add(dx*60*cc,-80+65*f,dz*60*cc, dx*20*cc,-80+65*f,dz*20*cc);
     }
   });
 
-  // ── Base arches ──
-  const archPts=16;
+  // Base arches
+  const ap=22;
   [{ax:1,az:0},{ax:-1,az:0},{ax:0,az:1},{ax:0,az:-1}].forEach(({ax,az})=>{
-    for(let i=0;i<archPts;i++){
-      const a1=(i/archPts)*Math.PI, a2=((i+1)/archPts)*Math.PI;
-      const r=58;
-      add(ax*r*Math.cos(a1-Math.PI/2),-80,az*r*Math.cos(a1-Math.PI/2)+r*Math.sin(a1-Math.PI/2),
-          ax*r*Math.cos(a2-Math.PI/2),-80,az*r*Math.cos(a2-Math.PI/2)+r*Math.sin(a2-Math.PI/2));
+    for(let i=0;i<ap;i++){
+      const a1=(i/ap)*Math.PI-Math.PI/2, a2=((i+1)/ap)*Math.PI-Math.PI/2;
+      const r=60;
+      add(ax*r*Math.cos(a1),-80,az*r*Math.cos(a1)+r*Math.sin(a1),
+          ax*r*Math.cos(a2),-80,az*r*Math.cos(a2)+r*Math.sin(a2));
     }
   });
 
-  // ── First platform ──
-  const p1y=-15;
-  const r1=22;
-  const rsegs=18;
-  for(let i=0;i<rsegs;i++){
-    const a1=(i/rsegs)*Math.PI*2, a2=((i+1)/rsegs)*Math.PI*2;
+  // First platform ring
+  const p1y=-15, r1=23, rs=22;
+  for(let i=0;i<rs;i++){
+    const a1=(i/rs)*Math.PI*2, a2=((i+1)/rs)*Math.PI*2;
     add(Math.cos(a1)*r1,p1y,Math.sin(a1)*r1, Math.cos(a2)*r1,p1y,Math.sin(a2)*r1);
-    add(Math.cos(a1)*r1,p1y,Math.sin(a1)*r1, Math.cos(a1)*(r1-5),p1y+4,Math.sin(a1)*(r1-5));
+    add(Math.cos(a1)*r1,p1y,Math.sin(a1)*r1, Math.cos(a1)*(r1-6),p1y+6,Math.sin(a1)*(r1-6));
   }
 
-  // ── Mid section ──
-  const msegs=8;
-  for(let i=0;i<msegs;i++){
-    const a=(i/msegs)*Math.PI*2;
-    const r0=19,r1t=8;
-    add(Math.cos(a)*r0,p1y,Math.sin(a)*r0, Math.cos(a)*r1t,p1y+65,Math.sin(a)*r1t);
-    if(i%2===0){
-      for(let j=0;j<5;j++){
-        const f=j/5;
-        const rb=lerp(r0,r1t,f);
-        const rc=lerp(r0,r1t,(j+1)/5);
-        add(Math.cos(a)*rb,p1y+65*f,Math.sin(a)*rb, Math.cos(a)*rc,p1y+65*(j+1)/5,Math.sin(a)*rc);
-      }
+  // Mid section struts + lattice rings
+  const ms=12;
+  for(let i=0;i<ms;i++){
+    const a=(i/ms)*Math.PI*2, r0=20, r1t=9;
+    add(Math.cos(a)*r0,p1y,Math.sin(a)*r0, Math.cos(a)*r1t,p1y+66,Math.sin(a)*r1t);
+    for(let j=0;j<7;j++){
+      const f=j/7, rb=lerp(r0,r1t,f), rc=lerp(r0,r1t,(j+1)/7);
+      add(Math.cos(a)*rb,p1y+66*f,Math.sin(a)*rb, Math.cos(a)*rc,p1y+66*(j+1)/7,Math.sin(a)*rc);
     }
   }
-
-  // Horizontal rings on mid section
-  for(let j=0;j<6;j++){
-    const f=(j+1)/7;
-    const rr=lerp(19,8,f);
-    const yy=p1y+65*f;
-    for(let i=0;i<12;i++){
-      const a1=(i/12)*Math.PI*2, a2=((i+1)/12)*Math.PI*2;
+  for(let j=0;j<9;j++){
+    const f=(j+1)/10, rr=lerp(20,9,f), yy=p1y+66*f;
+    for(let i=0;i<18;i++){
+      const a1=(i/18)*Math.PI*2, a2=((i+1)/18)*Math.PI*2;
       add(Math.cos(a1)*rr,yy,Math.sin(a1)*rr, Math.cos(a2)*rr,yy,Math.sin(a2)*rr);
     }
   }
 
-  // ── Second platform ──
-  const p2y=p1y+65;
-  const r2=9;
-  for(let i=0;i<rsegs;i++){
-    const a1=(i/rsegs)*Math.PI*2, a2=((i+1)/rsegs)*Math.PI*2;
+  // Second platform
+  const p2y=p1y+66, r2=10;
+  for(let i=0;i<rs;i++){
+    const a1=(i/rs)*Math.PI*2, a2=((i+1)/rs)*Math.PI*2;
     add(Math.cos(a1)*r2,p2y,Math.sin(a1)*r2, Math.cos(a2)*r2,p2y,Math.sin(a2)*r2);
   }
 
-  // ── Spire ──
-  const spireSegs=12;
-  for(let i=0;i<spireSegs;i++){
-    const a=(i/spireSegs)*Math.PI*2;
-    add(Math.cos(a)*8,p2y,Math.sin(a)*8, 0,p2y+55,0);
-    if(i%2===0){
-      for(let j=0;j<4;j++){
-        const f=j/4;
-        const rr=8*(1-f);
-        const rr2=8*(1-(j+1)/4);
-        add(Math.cos(a)*rr,p2y+55*f,Math.sin(a)*rr, Math.cos(a)*rr2,p2y+55*(j+1)/4,Math.sin(a)*rr2);
-      }
+  // Spire
+  const sp=16;
+  for(let i=0;i<sp;i++){
+    const a=(i/sp)*Math.PI*2;
+    add(Math.cos(a)*9,p2y,Math.sin(a)*9, 0,p2y+56,0);
+    for(let j=0;j<5;j++){
+      const f=j/5, rr=9*(1-f), rr2=9*(1-(j+1)/5);
+      add(Math.cos(a)*rr,p2y+56*f,Math.sin(a)*rr, Math.cos(a)*rr2,p2y+56*(j+1)/5,Math.sin(a)*rr2);
     }
   }
 
-  // ── Antenna ──
-  add(0,p2y+55,0, 0,p2y+72,0);
+  // Antenna
+  add(0,p2y+56,0, 0,p2y+74,0);
   return segs;
 }
-const TOWER_SEGS = buildTower();
+const TOWER_SEGS=buildTower();
 
 function drawTower(hue, alpha, glow) {
-  const gStr = `hsla(${hue},100%,70%,${alpha})`;
-  ctx.strokeStyle = gStr;
-  ctx.lineWidth = 1.2;
-  if (glow > 0) {
-    ctx.shadowColor = `hsl(${hue},100%,65%)`;
-    ctx.shadowBlur = glow;
-  }
-  TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2]) => line3d(x1,y1,z1,x2,y2,z2));
-  ctx.shadowBlur = 0;
+  // Pass 1 — wide diffuse glow
+  ctx.lineWidth=6; ctx.strokeStyle=`hsla(${hue},100%,60%,${alpha*0.15})`;
+  ctx.shadowColor=`hsl(${hue},100%,55%)`; ctx.shadowBlur=glow*2.8;
+  TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>line3d(x1,y1,z1,x2,y2,z2));
+
+  // Pass 2 — medium glow
+  ctx.lineWidth=2.8; ctx.strokeStyle=`hsla(${hue},100%,68%,${alpha*0.55})`;
+  ctx.shadowBlur=glow*1.3;
+  TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>line3d(x1,y1,z1,x2,y2,z2));
+
+  // Pass 3 — crisp core
+  ctx.lineWidth=1.6; ctx.strokeStyle=`hsla(${hue},85%,90%,${alpha})`;
+  ctx.shadowBlur=glow*0.5;
+  TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>line3d(x1,y1,z1,x2,y2,z2));
+  ctx.shadowBlur=0;
 }
 
-// ─── GROUND ───────────────────────────────────────────────────────────────────
-function drawGround(hue, alpha, t) {
-  // Perspective grid
-  const Y = -80;
-  for(let i=-16;i<=16;i++){
-    ctx.strokeStyle=`hsla(${hue},80%,35%,${alpha*0.6})`;
-    ctx.lineWidth=0.7;
-    line3d(i*30,Y,-500, i*30,Y,500);
-  }
-  for(let j=-15;j<=15;j++){
-    line3d(-500,Y,j*30, 500,Y,j*30);
-  }
-}
+// ─── CITY SILHOUETTE ─────────────────────────────────────────────────────────
+const BLDGS=[
+  // Left bank
+  {x:-360,z:60, w:85,h:52}, {x:-260,z:40, w:65,h:72}, {x:-180,z:25, w:50,h:40},
+  // Right bank
+  {x:140, z:30, w:55,h:68}, {x:205, z:45, w:72,h:50}, {x:285, z:65, w:62,h:74},
+  // Far background
+  {x:-220,z:-180,w:80,h:58}, {x:-130,z:-160,w:60,h:82},
+  {x:130, z:-170,w:72,h:54}, {x:215, z:-190,w:88,h:64},
+  {x:-420,z:-280,w:130,h:44},{x:340, z:-280,w:120,h:48},
+];
 
-// ─── RIVER (Seine) ────────────────────────────────────────────────────────────
-function drawRiver(alpha, t) {
-  const Y=-82;
-  for(let i=0;i<20;i++){
-    const wave = Math.sin(i*0.4+t*1.5)*8;
-    ctx.strokeStyle=`hsla(210,80%,55%,${alpha*(0.3+0.3*Math.sin(i+t))})`;
-    ctx.lineWidth=1.5;
-    line3d(-200+i*20,Y+wave,-60, -200+(i+1)*20,Y+Math.sin((i+1)*0.4+t*1.5)*8,-60);
-  }
-  // Reflection of tower in river
-  ctx.globalAlpha=alpha*0.25;
-  ctx.strokeStyle=`hsla(45,100%,60%,0.4)`;
-  ctx.lineWidth=0.8;
-  TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>{
-    line3d(x1,-y1-160,z1, x2,-y2-160,z2);
+function drawBuildings(hue, alpha) {
+  const GY=-80;
+  BLDGS.forEach(b=>{
+    const bl=project(b.x,      GY,      b.z);
+    const br=project(b.x+b.w,  GY,      b.z);
+    const brt=project(b.x+b.w, GY+b.h,  b.z);
+    const blt=project(b.x,     GY+b.h,  b.z);
+    if(!bl||!br||!brt||!blt) return;
+    ctx.fillStyle=`hsla(${hue},15%,7%,${alpha*0.96})`;
+    ctx.strokeStyle=`hsla(${hue},35%,20%,${alpha*0.35})`;
+    ctx.lineWidth=0.6;
+    ctx.beginPath();
+    ctx.moveTo(bl.x,bl.y); ctx.lineTo(br.x,br.y);
+    ctx.lineTo(brt.x,brt.y); ctx.lineTo(blt.x,blt.y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // A couple lit windows
+    for(let wy=0;wy<3;wy++) for(let wx=0;wx<2;wx++){
+      const wp=project(b.x+b.w*(0.2+wx*0.55), GY+b.h*(0.25+wy*0.28), b.z-1);
+      if(wp && Math.sin(b.x*7+wy*13+wx*31)>0.1){
+        ctx.fillStyle=`hsla(45,85%,70%,${alpha*0.5})`;
+        ctx.beginPath(); ctx.arc(wp.x,wp.y,Math.max(1,1.8*wp.scale*0.004+1),0,Math.PI*2); ctx.fill();
+      }
+    }
   });
+}
+
+// ─── GROUND GRID ─────────────────────────────────────────────────────────────
+function drawGround(hue, alpha) {
+  const Y=-80; ctx.lineWidth=0.55;
+  for(let i=-22;i<=22;i++){
+    const a=alpha*(Math.abs(i)===0?0.5:0.22);
+    ctx.strokeStyle=`hsla(${hue},55%,28%,${a})`;
+    line3d(i*25,Y,-700, i*25,Y,700);
+    line3d(-700,Y,i*25, 700,Y,i*25);
+  }
+}
+
+// ─── RIVER ───────────────────────────────────────────────────────────────────
+function drawRiver(alpha, t) {
+  if(alpha<0.01) return;
+  const Y=-83, Z=-70;
+  for(let i=0;i<26;i++){
+    const w1=Math.sin(i*0.38+t*1.9)*11, w2=Math.sin((i+1)*0.38+t*1.9)*11;
+    ctx.strokeStyle=`hsla(210,88%,62%,${alpha*(0.35+0.22*Math.sin(i*0.5+t))})`;
+    ctx.lineWidth=2.2;
+    line3d(-265+i*22,Y+w1,Z, -265+(i+1)*22,Y+w2,Z);
+  }
+  // Shimmer sparks on water
+  if(Math.random()<0.12){
+    const wx=-265+Math.random()*572, wz=Z+Math.random()*25-12;
+    const wp=project(wx,Y+2,wz);
+    if(wp){ ctx.fillStyle=`hsla(200,95%,92%,${alpha*0.6*Math.random()})`; ctx.beginPath(); ctx.arc(wp.x,wp.y,1.8,0,Math.PI*2); ctx.fill(); }
+  }
+  // Tower reflection
+  ctx.globalAlpha=alpha*0.2;
+  ctx.strokeStyle=`hsla(50,100%,60%,0.6)`;
+  ctx.lineWidth=0.9;
+  TOWER_SEGS.forEach(([x1,y1,z1,x2,y2,z2])=>line3d(x1,-y1-162,z1+Z-10, x2,-y2-162,z2+Z-10));
   ctx.globalAlpha=1;
 }
 
-// ─── FOG/MIST OVERLAY ────────────────────────────────────────────────────────
-function drawFog(alpha, hue) {
-  const grad = ctx.createRadialGradient(W/2,H,0,W/2,H,H*1.5);
-  grad.addColorStop(0, `hsla(${hue},40%,10%,0)`);
-  grad.addColorStop(0.5, `hsla(${hue},40%,8%,${alpha*0.3})`);
-  grad.addColorStop(1, `hsla(${hue},40%,5%,${alpha})`);
-  ctx.fillStyle=grad;
-  ctx.fillRect(0,0,W,H);
-}
-
-// ─── VIGNETTE ────────────────────────────────────────────────────────────────
-function drawVignette(strength) {
-  const g = ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.85);
-  g.addColorStop(0,'rgba(0,0,0,0)');
-  g.addColorStop(1,`rgba(0,0,0,${strength})`);
-  ctx.fillStyle=g;
-  ctx.fillRect(0,0,W,H);
-}
-
-// ─── STORY TEXT ──────────────────────────────────────────────────────────────
-class StoryText {
-  constructor() { this.alpha=0; this.text=''; this.sub=''; this.target=0; }
-  set(text,sub='') { this.text=text; this.sub=sub; this.alpha=0; this.target=1; }
-  hide() { this.target=0; }
-  update() { this.alpha=lerp(this.alpha,this.target,0.025); }
-  draw() {
-    if(this.alpha<0.01) return;
-    ctx.textAlign='center';
-    const fs=Math.min(W*0.045,32);
-    ctx.font=`300 ${fs}px Georgia,serif`;
-    ctx.letterSpacing='4px';
-    ctx.shadowColor='rgba(180,120,255,0.8)';
-    ctx.shadowBlur=20;
-    ctx.fillStyle=`rgba(230,210,255,${this.alpha*0.95})`;
-    ctx.fillText(this.text, W/2, H*0.75);
-    if(this.sub) {
-      ctx.font=`200 ${fs*0.55}px Georgia,serif`;
-      ctx.fillStyle=`rgba(180,160,220,${this.alpha*0.7})`;
-      ctx.fillText(this.sub, W/2, H*0.75+fs*1.3);
-    }
-    ctx.shadowBlur=0;
-    ctx.textAlign='left';
-  }
-}
-const story = new StoryText();
-
-// ─── SCROLLING TICKER ────────────────────────────────────────────────────────
-const ticker = '  ✦  DREAM OF PARIS  ✦  NICOLAS/OPENCLAW PRODUCTIONS  ✦  DEDICATED TO THOSE WHO LEFT THEIR HEARTS IN PARIS  ✦  À BIENTÔT  ✦  ';
-let tickX = 0;
-function drawTicker(alpha) {
-  if(alpha<0.01) return;
-  const fh=Math.min(H*0.04,22);
-  ctx.font=`bold ${fh}px monospace`;
-  const tw=ctx.measureText(ticker).width;
-  tickX=(tickX-1.5);
-  if(tickX<-tw) tickX=W;
-  ctx.fillStyle=`rgba(0,0,0,${alpha*0.75})`;
-  ctx.fillRect(0,H-fh*1.6,W,fh*1.6);
-  ctx.strokeStyle=`rgba(200,100,255,${alpha*0.5})`;
-  ctx.lineWidth=0.5;
-  ctx.strokeRect(0,H-fh*1.6,W,fh*1.6);
-  ctx.fillStyle=`rgba(220,180,255,${alpha*0.9})`;
-  ctx.fillText(ticker,tickX,H-fh*0.45);
-  ctx.fillText(ticker,tickX+tw,H-fh*0.45);
-}
-
-// ─── SCENE SYSTEM ────────────────────────────────────────────────────────────
-// Each scene: duration, camera path, what to draw, story text
-const SCENES = [
-  { // 0: OVERTURE
-    dur:18, name:'overture',
-    story:['Paris.','Été 1997.'],
-    storySub:['','A dream she had forgotten to finish.'],
-    cam:{ x:0,y:200,z:600, tx:0,ty:0,tz:0, fov:350 },
-    camEnd:{ x:0,y:80,z:400, tx:0,ty:30,tz:0, fov:400 },
-  },
-  { // 1: ARRIVAL — descending through mist
-    dur:20, name:'arrival',
-    story:['She had not been back','in seven years.'],
-    storySub:['','The city remembered.'],
-    cam:{ x:120,y:180,z:380, tx:0,ty:20,tz:0, fov:380 },
-    camEnd:{ x:60,y:60,z:280, tx:0,ty:30,tz:0, fov:420 },
-  },
-  { // 2: THE TOWER — close orbit
-    dur:22, name:'tower',
-    story:['La Dame de Fer.','Iron Lady. Still standing.'],
-    storySub:['','As if she had never left.'],
-    cam:{ x:120,y:20,z:200, tx:0,ty:40,tz:0, fov:500 },
-    camEnd:{ x:-120,y:50,z:200, tx:0,ty:40,tz:0, fov:480 },
-  },
-  { // 3: THE SEINE — low over water
-    dur:18, name:'seine',
-    story:['The Seine carries everything','to the sea.'],
-    storySub:['','Memories. Tears. Tuesday afternoons.'],
-    cam:{ x:-80,y:-40,z:180, tx:0,ty:20,tz:-80, fov:460 },
-    camEnd:{ x:80,y:-30,z:180, tx:0,ty:10,tz:-80, fov:460 },
-  },
-  { // 4: MINUIT — midnight, tower glittering
-    dur:20, name:'minuit',
-    story:['At midnight, Paris','holds its breath.'],
-    storySub:['','The tower wears its sparks like jewels.'],
-    cam:{ x:0,y:-20,z:260, tx:0,ty:60,tz:0, fov:500 },
-    camEnd:{ x:30,y:10,z:240, tx:0,ty:70,tz:0, fov:480 },
-  },
-  { // 5: L'AUBE — dawn, pulling back
-    dur:18, name:'aube',
-    story:['But cities forgive.','They always do.'],
-    storySub:['','Dawn breaks gold over the arrondissements.'],
-    cam:{ x:0,y:80,z:250, tx:0,ty:40,tz:0, fov:420 },
-    camEnd:{ x:40,y:100,z:400, tx:0,ty:30,tz:0, fov:380 },
-  },
-  { // 6: FIN — departure
-    dur:16, name:'fin',
-    story:['À bientôt,','Paris.'],
-    storySub:['','Until the next dream.'],
-    cam:{ x:80,y:150,z:500, tx:0,ty:30,tz:0, fov:360 },
-    camEnd:{ x:0,y:200,z:700, tx:0,ty:0,tz:0, fov:320 },
-  },
-];
-
-let sceneIdx=0, sceneT=0, totalT=0;
-let prevStory=null;
-
-function getCurrentScene() {
-  let acc=0;
-  for(let i=0;i<SCENES.length;i++){
-    acc+=SCENES[i].dur;
-    if(totalT<acc) return { scene:SCENES[i], idx:i, t:(totalT-(acc-SCENES[i].dur))/SCENES[i].dur };
-  }
-  // Loop
-  totalT=0;
-  return { scene:SCENES[0], idx:0, t:0 };
-}
-
-function setCam(sc, t) {
-  const s=sc.scene, f=ease(t);
-  cam.x=lerp(s.cam.x,s.camEnd.x,f);
-  cam.y=lerp(s.cam.y,s.camEnd.y,f);
-  cam.z=lerp(s.cam.z,s.camEnd.z,f);
-  cam.tx=lerp(s.cam.tx,s.camEnd.tx,f);
-  cam.ty=lerp(s.cam.ty,s.camEnd.ty,f);
-  cam.tz=lerp(s.cam.tz,s.camEnd.tz,f);
-  cam.fov=lerp(s.cam.fov,s.camEnd.fov,f);
-
-  // Idle camera drift
-  const drift=8;
-  cam.x+=Math.sin(totalT*0.18)*drift;
-  cam.y+=Math.cos(totalT*0.13)*drift*0.5;
-}
-
-// ─── SCENE PALETTE ───────────────────────────────────────────────────────────
-function scenePalette(name, t) {
-  const palettes = {
-    overture: { sky:[240,80,3],  tower:270, grid:240, fog:0.7, glow:12 },
-    arrival:  { sky:[220,70,4],  tower:200, grid:220, fog:0.5, glow:8  },
-    tower:    { sky:[270,80,4],  tower:45,  grid:280, fog:0.4, glow:20 },
-    seine:    { sky:[200,60,5],  tower:190, grid:200, fog:0.6, glow:6  },
-    minuit:   { sky:[260,90,3],  tower:55,  grid:260, fog:0.5, glow:28 },
-    aube:     { sky:[30,80,6],   tower:35,  grid:40,  fog:0.4, glow:15 },
-    fin:      { sky:[260,60,4],  tower:280, grid:260, fog:0.8, glow:8  },
-  };
-  return palettes[name] || palettes.overture;
-}
-
 // ─── SKY ─────────────────────────────────────────────────────────────────────
-function drawSky(pal, alpha) {
+function drawSky(pal) {
   const [h,s,l]=pal.sky;
   const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0, `hsla(${h},${s}%,${l}%,1)`);
-  g.addColorStop(0.6, `hsla(${h+20},${s-20}%,${l*0.5}%,1)`);
-  g.addColorStop(1, `hsla(${h+40},${s-30}%,2%,1)`);
-  ctx.fillStyle=g;
-  ctx.fillRect(0,0,W,H);
-}
+  g.addColorStop(0,   `hsl(${h},${s}%,${l}%)`);
+  g.addColorStop(0.5, `hsl(${h+12},${Math.max(s-18,20)}%,${Math.max(l*0.38,2.5)}%)`);
+  g.addColorStop(1,   `hsl(${h+22},${Math.max(s-28,15)}%,${Math.max(l*0.18,1.2)}%)`);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
 
-// ─── AMBIENT PARTICLES ───────────────────────────────────────────────────────
-function spawnAmbient(scene, t) {
-  if(scene==='tower'||scene==='minuit') {
-    if(Math.random()<0.4) embers.spawn(
-      (Math.random()-0.5)*60,-80,(Math.random()-0.5)*60,
-      {vy:-3-Math.random()*3, spread:4, decay:0.004, r:1.5+Math.random()*2,
-       hue:45+Math.random()*30, sat:100, lit:80, alpha:0.9}
-    );
-  }
-  if(scene==='aube') {
-    if(Math.random()<0.2) embers.spawn(
-      (Math.random()-0.5)*200, 20+Math.random()*40,(Math.random()-0.5)*200,
-      {vy:-1, spread:6, decay:0.003, r:1+Math.random()*2,
-       hue:30+Math.random()*40, sat:90, lit:75}
-    );
-  }
-  if(Math.random()<0.05) mist.spawn(
-    (Math.random()-0.5)*300,-80+Math.random()*40,(Math.random()-0.5)*300,
-    {vy:-0.3, spread:2, decay:0.002, r:8+Math.random()*12,
-     hue:220, sat:30, lit:70, alpha:0.08}
-  );
-  if(scene==='minuit'&&Math.random()<0.15) sparks.spawn(
-    (Math.random()-0.5)*20, 30+Math.random()*80,(Math.random()-0.5)*20,
-    {vy:-8-Math.random()*8, spread:15, decay:0.02, r:1,
-     hue:55+Math.random()*20, sat:100, lit:90}
-  );
+  // Horizon glow (city light / ambient)
+  const hy=H*0.53;
+  const hg=ctx.createRadialGradient(W/2,hy,0, W/2,hy,W*0.58);
+  hg.addColorStop(0,   `hsla(${h+18},85%,52%,0.14)`);
+  hg.addColorStop(0.45,`hsla(${h+10},75%,42%,0.06)`);
+  hg.addColorStop(1,   `hsla(${h},65%,32%,0)`);
+  ctx.fillStyle=hg; ctx.fillRect(0,0,W,H);
 }
 
 // ─── MOON ────────────────────────────────────────────────────────────────────
 function drawMoon(alpha) {
-  const p = project(200,200,-400); if(!p) return;
-  ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(20,p.scale*30),0,Math.PI*2);
-  ctx.fillStyle=`rgba(240,230,200,${alpha*0.9})`;
-  ctx.shadowColor='rgba(220,210,180,0.6)'; ctx.shadowBlur=30;
-  ctx.fill(); ctx.shadowBlur=0;
+  const p=project(185,185,-520); if(!p) return;
+  const r=Math.max(22,p.scale*22);
+  // Halo
+  ctx.beginPath(); ctx.arc(p.x,p.y,r*2.2,0,Math.PI*2);
+  ctx.fillStyle=`rgba(235,218,182,${alpha*0.07})`; ctx.fill();
+  // Disc
+  ctx.shadowColor='rgba(255,245,210,0.75)'; ctx.shadowBlur=28;
+  ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2);
+  ctx.fillStyle=`rgba(250,240,215,${alpha*0.93})`; ctx.fill();
+  ctx.shadowBlur=0;
+}
+
+// ─── FOG ─────────────────────────────────────────────────────────────────────
+function drawFog(alpha, hue) {
+  const g=ctx.createRadialGradient(W/2,H,0, W/2,H,H*1.5);
+  g.addColorStop(0,   `hsla(${hue},38%,10%,0)`);
+  g.addColorStop(0.38,`hsla(${hue},38%,8%,${alpha*0.18})`);
+  g.addColorStop(1,   `hsla(${hue},38%,5%,${alpha*0.55})`);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
+function drawVignette(str) {
+  const g=ctx.createRadialGradient(W/2,H/2,H*0.22,W/2,H/2,H*0.9);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,`rgba(0,0,0,${str})`);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
+// ─── STORY TEXT ──────────────────────────────────────────────────────────────
+class StoryText {
+  constructor(){ this.a=0; this.l1=''; this.l2=''; this.sub=''; this.tgt=0; }
+  set(l1='',l2='',sub=''){ this.l1=l1; this.l2=l2; this.sub=sub; this.a=0; this.tgt=1; }
+  hide(){ this.tgt=0; }
+  update(){ this.a=lerp(this.a,this.tgt,0.03); }
+  draw(){
+    if(this.a<0.01) return;
+    ctx.textAlign='center';
+    const fs=Math.min(W*0.047,33);
+    ctx.shadowColor='rgba(175,110,255,0.85)'; ctx.shadowBlur=26;
+    let y=H*0.70;
+
+    if(this.l1){
+      ctx.font=`300 ${fs}px Georgia,serif`; ctx.letterSpacing='4px';
+      ctx.fillStyle=`rgba(248,230,255,${this.a*0.97})`;
+      ctx.fillText(this.l1,W/2,y); y+=fs*1.48;
+    }
+    if(this.l2){
+      ctx.font=`300 ${fs*0.78}px Georgia,serif`; ctx.letterSpacing='3px';
+      ctx.fillStyle=`rgba(218,198,248,${this.a*0.84})`;
+      ctx.fillText(this.l2,W/2,y); y+=fs*1.2;
+    }
+    if(this.sub){
+      ctx.font=`200 ${fs*0.46}px Georgia,serif`; ctx.letterSpacing='2px';
+      ctx.fillStyle=`rgba(172,148,215,${this.a*0.58})`;
+      ctx.fillText(this.sub,W/2,y);
+    }
+    ctx.shadowBlur=0; ctx.textAlign='left';
+  }
+}
+const story=new StoryText();
+
+// ─── TICKER ──────────────────────────────────────────────────────────────────
+const TICK='  ✦  DREAM OF PARIS  ✦  NICOLAS/OPENCLAW PRODUCTIONS  ✦  DEDICATED TO THOSE WHO LEFT THEIR HEARTS IN PARIS  ✦  À BIENTÔT  ✦  ';
+let tickX=0;
+function drawTicker(alpha){
+  if(alpha<0.01) return;
+  const fh=Math.min(H*0.038,21);
+  ctx.font=`bold ${fh}px monospace`;
+  const tw=ctx.measureText(TICK).width;
+  tickX-=1.3; if(tickX<-tw) tickX=W;
+  const bh=fh*1.75;
+  ctx.fillStyle=`rgba(0,0,0,${alpha*0.84})`; ctx.fillRect(0,H-bh,W,bh);
+  ctx.strokeStyle=`rgba(195,95,255,${alpha*0.4})`; ctx.lineWidth=0.5;
+  ctx.beginPath(); ctx.moveTo(0,H-bh); ctx.lineTo(W,H-bh); ctx.stroke();
+  ctx.fillStyle=`rgba(218,178,255,${alpha*0.9})`;
+  ctx.fillText(TICK,tickX,H-fh*0.4);
+  ctx.fillText(TICK,tickX+tw,H-fh*0.4);
 }
 
 // ─── TITLE CARD ──────────────────────────────────────────────────────────────
-function drawTitleCard(alpha) {
+function drawTitle(alpha){
   if(alpha<0.01) return;
   ctx.textAlign='center';
-  const fs=Math.min(W*0.06,40);
-  ctx.font=`100 ${fs*0.45}px Georgia,serif`;
-  ctx.letterSpacing='8px';
-  ctx.fillStyle=`rgba(200,180,255,${alpha*0.6})`;
-  ctx.fillText('NICOLAS / OPENCLAW PRODUCTIONS PRESENTS', W/2, H*0.18);
-  ctx.font=`400 ${fs}px Georgia,serif`;
-  ctx.letterSpacing='12px';
-  ctx.shadowColor=`rgba(180,100,255,${alpha*0.8})`; ctx.shadowBlur=40;
-  ctx.fillStyle=`rgba(240,220,255,${alpha})`;
-  ctx.fillText('DREAM OF PARIS', W/2, H*0.28);
+  const fs=Math.min(W*0.062,44);
+  ctx.shadowColor=`rgba(195,110,255,${alpha*0.85})`; ctx.shadowBlur=50;
+  ctx.font=`100 ${fs*0.37}px Georgia,serif`; ctx.letterSpacing='7px';
+  ctx.fillStyle=`rgba(188,165,228,${alpha*0.55})`;
+  ctx.fillText('NICOLAS / OPENCLAW PRODUCTIONS PRESENTS',W/2,H*0.18);
+  ctx.font=`400 ${fs}px Georgia,serif`; ctx.letterSpacing='14px';
+  ctx.fillStyle=`rgba(248,228,255,${alpha})`;
+  ctx.fillText('DREAM OF PARIS',W/2,H*0.28);
+  ctx.font=`200 ${fs*0.37}px Georgia,serif`; ctx.letterSpacing='5px';
   ctx.shadowBlur=0;
-  ctx.font=`200 ${fs*0.4}px Georgia,serif`;
-  ctx.letterSpacing='4px';
-  ctx.fillStyle=`rgba(180,160,220,${alpha*0.7})`;
-  ctx.fillText('A JOURNEY IN SEVEN MOVEMENTS', W/2, H*0.36);
-  ctx.textAlign='left';
+  ctx.fillStyle=`rgba(172,152,218,${alpha*0.62})`;
+  ctx.fillText('A JOURNEY IN SEVEN MOVEMENTS',W/2,H*0.36);
+  ctx.textAlign='left'; ctx.shadowBlur=0;
+}
+
+// ─── SCENE DEFINITIONS ───────────────────────────────────────────────────────
+const SCENES=[
+  { dur:18, name:'overture',
+    l1:'Paris.',               l2:'Été 1997.',         sub:'A dream she had forgotten to finish.',
+    cam:    {x:0,   y:200,z:580,tx:0,ty:0, tz:0,fov:350},
+    camEnd: {x:0,   y:80, z:390,tx:0,ty:30,tz:0,fov:400},
+    sky:[265,55,10], tower:278, grid:262, fog:0.48, glow:16 },
+
+  { dur:20, name:'arrival',
+    l1:'She had not been back', l2:'in seven years.',  sub:'The city remembered.',
+    cam:    {x:125, y:180,z:375,tx:0,ty:20,tz:0,fov:380},
+    camEnd: {x:62,  y:60, z:275,tx:0,ty:30,tz:0,fov:425},
+    sky:[222,62,12], tower:205, grid:222, fog:0.38, glow:10 },
+
+  { dur:22, name:'tower',
+    l1:'La Dame de Fer.',       l2:'Iron Lady. Still standing.', sub:'As if she had never left.',
+    cam:    {x:135, y:18, z:198,tx:0,ty:42,tz:0,fov:510},
+    camEnd: {x:-135,y:52, z:198,tx:0,ty:42,tz:0,fov:490},
+    sky:[262,72,8],  tower:48,  grid:268, fog:0.33, glow:28 },
+
+  { dur:18, name:'seine',
+    l1:'The Seine carries everything', l2:'to the sea.', sub:'Memories. Tears. Tuesday afternoons.',
+    cam:    {x:-85, y:-36,z:178,tx:0,ty:10,tz:-72,fov:462},
+    camEnd: {x:85,  y:-26,z:178,tx:0,ty:10,tz:-72,fov:462},
+    sky:[205,57,10], tower:198, grid:205, fog:0.42, glow:9  },
+
+  { dur:20, name:'minuit',
+    l1:'At midnight, Paris',    l2:'holds its breath.', sub:'The tower wears its sparks like jewels.',
+    cam:    {x:0,   y:-22,z:258,tx:0,ty:62,tz:0,fov:505},
+    camEnd: {x:32,  y:12, z:238,tx:0,ty:72,tz:0,fov:485},
+    sky:[250,88,6],  tower:55,  grid:250, fog:0.38, glow:40 },
+
+  { dur:18, name:'aube',
+    l1:'But cities forgive.',   l2:'They always do.',  sub:'Dawn breaks gold over the arrondissements.',
+    cam:    {x:0,   y:82, z:248,tx:0,ty:42,tz:0,fov:422},
+    camEnd: {x:42,  y:102,z:398,tx:0,ty:32,tz:0,fov:382},
+    sky:[28,78,15],  tower:38,  grid:38,  fog:0.32, glow:20 },
+
+  { dur:16, name:'fin',
+    l1:'À bientôt,',            l2:'Paris.',            sub:'Until the next dream.',
+    cam:    {x:82,  y:152,z:498,tx:0,ty:32,tz:0,fov:362},
+    camEnd: {x:0,   y:202,z:698,tx:0,ty:0, tz:0,fov:322},
+    sky:[265,52,11], tower:280, grid:265, fog:0.52, glow:10 },
+];
+
+const TOTAL_DUR=SCENES.reduce((s,sc)=>s+sc.dur,0);
+let totalT=0, storyShown=-1;
+
+function getScene(){
+  let acc=0;
+  for(let i=0;i<SCENES.length;i++){
+    if(totalT<acc+SCENES[i].dur) return {S:SCENES[i],idx:i,t:(totalT-acc)/SCENES[i].dur};
+    acc+=SCENES[i].dur;
+  }
+  return {S:SCENES[0],idx:0,t:0};
+}
+
+function setCam(S, t){
+  const f=ease(t);
+  cam.x  =lerp(S.cam.x,  S.camEnd.x,  f)+Math.sin(totalT*0.17)*7;
+  cam.y  =lerp(S.cam.y,  S.camEnd.y,  f)+Math.cos(totalT*0.13)*4;
+  cam.z  =lerp(S.cam.z,  S.camEnd.z,  f);
+  cam.tx =lerp(S.cam.tx, S.camEnd.tx, f);
+  cam.ty =lerp(S.cam.ty, S.camEnd.ty, f);
+  cam.tz =lerp(S.cam.tz, S.camEnd.tz, f);
+  cam.fov=lerp(S.cam.fov,S.camEnd.fov,f);
+}
+
+// ─── AMBIENT PARTICLE SPAWNER ────────────────────────────────────────────────
+function spawnAmbient(name){
+  if(name==='tower'||name==='minuit'){
+    if(Math.random()<0.65) embers.spawn(
+      (Math.random()-0.5)*65,-80,(Math.random()-0.5)*65,
+      {vy:-4.5-Math.random()*4.5,spread:6,decay:0.005,r:2.2+Math.random()*2.5,
+       hue:45+Math.random()*20,sat:100,lit:88,alpha:0.95});
+  }
+  if(name==='aube'){
+    if(Math.random()<0.35) embers.spawn(
+      (Math.random()-0.5)*260,28+Math.random()*55,(Math.random()-0.5)*260,
+      {vy:-1.8,spread:9,decay:0.0028,r:1.8+Math.random()*2.8,
+       hue:32+Math.random()*32,sat:92,lit:80});
+  }
+  if(Math.random()<0.09) mist.spawn(
+    (Math.random()-0.5)*450,-76+Math.random()*32,(Math.random()-0.5)*450,
+    {vy:-0.18,spread:2.5,decay:0.0012,r:14+Math.random()*20,
+     hue:220,sat:22,lit:78,alpha:0.065});
+  if(name==='minuit'&&Math.random()<0.28) sparks.spawn(
+    (Math.random()-0.5)*28,18+Math.random()*105,(Math.random()-0.5)*28,
+    {vy:-11-Math.random()*11,spread:20,decay:0.016,r:1.3,
+     hue:55+Math.random()*28,sat:100,lit:98});
 }
 
 // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
-let lastTime=0, storyShown=-1;
-const TOTAL_DUR = SCENES.reduce((s,sc)=>s+sc.dur,0);
-
-function frame(now) {
-  const dt = Math.min((now-lastTime)/1000, 0.05);
+let lastTime=0;
+function frame(now){
+  const dt=Math.min((now-lastTime)/1000,0.05);
   lastTime=now; totalT+=dt;
-  if(totalT>=TOTAL_DUR) totalT=0;
+  if(totalT>=TOTAL_DUR) totalT-=TOTAL_DUR;
 
-  const sc = getCurrentScene();
-  const { scene:S, idx, t:scT } = sc;
-  const pal = scenePalette(S.name, scT);
+  const {S,idx,t:scT}=getScene();
+  setCam(S,scT);
 
-  setCam(sc, scT);
-
-  // Story text triggers
-  if(idx!==storyShown) {
-    storyShown=idx;
-    const lines=S.story||[];
-    story.set(lines[0]||'', S.storySub?S.storySub[1]:'');
-  }
-  if(scT>0.65) story.hide();
+  // Story triggers
+  if(idx!==storyShown){ storyShown=idx; story.set(S.l1,S.l2,S.sub); }
+  if(scT>0.63) story.hide();
   story.update();
 
-  // Spawn particles
-  spawnAmbient(S.name, totalT);
+  spawnAmbient(S.name);
   embers.update(); mist.update(); sparks.update();
 
   // ── DRAW ──────────────────────────────────────────────────────────────────
-  drawSky(pal, 1);
+  drawSky(S);
+  const starA=S.name==='aube'?Math.max(0,1-scT*2.8):0.92;
+  drawStars(starA,totalT);
+  const moonA=S.name==='aube'?Math.max(0,1-scT*2.8):0.88;
+  drawMoon(moonA);
+  mist.draw(0.65);
+  drawBuildings(S.tower,0.95);
 
-  // Stars
-  const starAlpha = S.name==='aube' ? 1-scT : 1;
-  drawStars(starAlpha*0.9, totalT);
+  // River: full in seine, partial elsewhere
+  const riverFull=S.name==='seine'?smoothstep(0,0.25,scT)*smoothstep(1,0.82,scT):0;
+  const riverBase=(['overture','arrival'].includes(S.name))?0:0.2;
+  drawRiver(Math.max(riverFull,riverBase),totalT);
 
-  // Moon
-  const moonAlpha = S.name==='aube' ? Math.max(0,1-scT*2) : 0.8;
-  drawMoon(moonAlpha);
+  drawGround(S.grid,0.6);
 
-  // Mist particles (behind tower)
-  mist.draw(0.5);
+  const tHue=S.tower+Math.sin(totalT*0.42)*14;
+  const pulse=S.name==='minuit'?1+0.18*Math.sin(totalT*5.8):1;
+  drawTower(tHue,0.92,S.glow*pulse);
 
-  // River (seine scene)
-  const riverA = S.name==='seine' ? smoothstep(0,0.3,scT)*smoothstep(1,0.8,scT) : 0;
-  if(riverA>0) drawRiver(riverA, totalT);
+  embers.draw(1); sparks.draw(1);
 
-  // Ground grid
-  ctx.lineWidth=0.7;
-  drawGround(pal.grid, 0.7, totalT);
+  drawFog(S.fog,S.sky[0]);
+  drawVignette(0.48);
 
-  // Tower
-  const towerHue = pal.tower + Math.sin(totalT*0.3)*15;
-  drawTower(towerHue, 0.9, pal.glow);
-
-  // Embers above tower
-  embers.draw(0.9);
-  sparks.draw(0.9);
-
-  // Fog / atmosphere
-  drawFog(pal.fog*0.6, pal.sky[0]);
-  drawVignette(0.55);
-
-  // Cinematic letterbox
-  const lbH=Math.floor(H*0.07);
-  ctx.fillStyle='rgba(0,0,0,0.92)';
+  // Letterbox bars
+  const lbH=Math.floor(H*0.077);
+  ctx.fillStyle='rgba(0,0,0,0.95)';
   ctx.fillRect(0,0,W,lbH);
-  ctx.fillRect(0,H-lbH-18,W,lbH+18);
+  ctx.fillRect(0,H-lbH-22,W,lbH+22);
 
-  // Story text
   story.draw();
 
   // Title card (overture only)
-  const titleA = S.name==='overture' ? smoothstep(0,0.2,scT)*smoothstep(1,0.7,scT) : 0;
-  drawTitleCard(titleA);
+  drawTitle(S.name==='overture'?smoothstep(0,0.18,scT)*smoothstep(1,0.72,scT):0);
 
-  // Scene subtitle (top bar)
-  if(scT<0.35) {
-    const subA=smoothstep(0,0.1,scT)*smoothstep(0.35,0.25,scT);
+  // Scene label
+  if(scT<0.28){
+    const sa=smoothstep(0,0.07,scT)*smoothstep(0.28,0.2,scT);
     ctx.textAlign='left';
-    ctx.font=`200 ${Math.min(H*0.022,14)}px Georgia,serif`;
+    ctx.font=`200 ${Math.min(H*0.021,13)}px Georgia,serif`;
     ctx.letterSpacing='5px';
-    ctx.fillStyle=`rgba(180,160,220,${subA*0.7})`;
-    ctx.fillText(`${idx+1} / ${SCENES.length}  ·  ${S.name.toUpperCase()}`, W*0.04, lbH*0.65);
+    ctx.fillStyle=`rgba(172,152,215,${sa*0.74})`;
+    ctx.fillText(`${String(idx+1).padStart(2,'0')} / ${SCENES.length}  ·  ${S.name.toUpperCase()}`,W*0.04,lbH*0.65);
   }
 
-  // Ticker (after overture)
-  const tickA = S.name==='overture' ? smoothstep(0.6,1,scT) : 1;
-  drawTicker(tickA*0.85);
+  // Ticker
+  drawTicker(S.name==='overture'?smoothstep(0.55,1,scT):0.88);
 
   requestAnimationFrame(frame);
 }

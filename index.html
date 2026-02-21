@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DREAM OF PARIS - A DEMOSCENE TRIBUTE</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: monospace; }
+  canvas { display: block; }
+  #scroller {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 40px;
+    background: #000;
+    border-top: 2px solid #ff00ff;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+  }
+  #scroll-text {
+    white-space: nowrap;
+    font-size: 22px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    position: absolute;
+    will-change: transform;
+  }
+  #title-overlay {
+    position: fixed;
+    top: 20px;
+    width: 100%;
+    text-align: center;
+    pointer-events: none;
+  }
+  #title {
+    font-size: 36px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 8px;
+    text-shadow: 0 0 20px currentColor;
+  }
+  #subtitle {
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 4px;
+    margin-top: 6px;
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+<div id="title-overlay">
+  <div id="title">✦ DREAM OF PARIS ✦</div>
+  <div id="subtitle">A DEMOSCENE TRIBUTE · MCMXCVII</div>
+</div>
+
+<div id="scroller">
+  <span id="scroll-text"></span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── SCROLL TEXT ──────────────────────────────────────────────────────────────
+const scrollMsg = '★ DREAM OF PARIS ★ CODED BY NICOLAS/OPENCLAW ★ GREETINGS TO: ALL CODERS, ALL DREAMERS, ALL LOVERS OF THE CITY OF LIGHT ★ LA TOUR EIFFEL FOREVER ★ VIVE LA FRANCE ★ THIS DEMO REQUIRES A 486DX2-66 OR BETTER ★ NO VGA CARD DETECTED - RUNNING IN SUPER VGA MODE ★ ';
+const scrollEl = document.getElementById('scroll-text');
+scrollEl.textContent = scrollMsg + scrollMsg;
+let scrollX = window.innerWidth;
+function animateScroll() {
+  scrollX -= 2;
+  const w = scrollEl.offsetWidth / 2;
+  if (scrollX < -w) scrollX = 0;
+  scrollEl.style.transform = `translateX(${scrollX}px)`;
+  requestAnimationFrame(animateScroll);
+}
+animateScroll();
+
+// ── TITLE COLOR CYCLE ────────────────────────────────────────────────────────
+const titleEl = document.getElementById('title');
+const subtitleEl = document.getElementById('subtitle');
+const colors = ['#ff00ff','#ff6600','#ffff00','#00ffff','#ff0066','#00ff88'];
+let ci = 0;
+setInterval(() => {
+  ci = (ci + 1) % colors.length;
+  titleEl.style.color = colors[ci];
+  titleEl.style.textShadow = `0 0 30px ${colors[ci]}, 0 0 60px ${colors[ci]}`;
+  subtitleEl.style.color = colors[(ci + 2) % colors.length];
+}, 400);
+
+// ── THREE.JS SCENE ───────────────────────────────────────────────────────────
+const W = window.innerWidth, H = window.innerHeight - 40;
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setSize(W, H);
+renderer.setClearColor(0x000011);
+document.body.insertBefore(renderer.domElement, document.getElementById('title-overlay'));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 2000);
+camera.position.set(0, 30, 180);
+camera.lookAt(0, 40, 0);
+
+// ── STARFIELD ────────────────────────────────────────────────────────────────
+const starGeo = new THREE.BufferGeometry();
+const starVerts = [];
+for (let i = 0; i < 3000; i++) {
+  starVerts.push(
+    (Math.random() - 0.5) * 2000,
+    (Math.random() - 0.5) * 1000,
+    (Math.random() - 0.5) * 2000
+  );
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.8 }));
+scene.add(stars);
+
+// ── GROUND GRID ──────────────────────────────────────────────────────────────
+const gridHelper = new THREE.GridHelper(400, 30, 0xff00ff, 0x330033);
+gridHelper.position.y = -10;
+scene.add(gridHelper);
+
+// ── EIFFEL TOWER (built from lines) ─────────────────────────────────────────
+function makeTower() {
+  const mat = new THREE.LineBasicMaterial({ color: 0xff6600, linewidth: 1 });
+  const group = new THREE.Group();
+
+  function box(x1, y1, x2, y2, z) {
+    const pts = [
+      new THREE.Vector3(-x1, y1, -z), new THREE.Vector3( x1, y1, -z),
+      new THREE.Vector3( x1, y1, -z), new THREE.Vector3( x2, y2, -z),
+      new THREE.Vector3( x2, y2, -z), new THREE.Vector3(-x2, y2, -z),
+      new THREE.Vector3(-x2, y2, -z), new THREE.Vector3(-x1, y1, -z),
+      // back
+      new THREE.Vector3(-x1, y1,  z), new THREE.Vector3( x1, y1,  z),
+      new THREE.Vector3( x1, y1,  z), new THREE.Vector3( x2, y2,  z),
+      new THREE.Vector3( x2, y2,  z), new THREE.Vector3(-x2, y2,  z),
+      new THREE.Vector3(-x2, y2,  z), new THREE.Vector3(-x1, y1,  z),
+      // connectors
+      new THREE.Vector3(-x1, y1, -z), new THREE.Vector3(-x1, y1,  z),
+      new THREE.Vector3( x1, y1, -z), new THREE.Vector3( x1, y1,  z),
+      new THREE.Vector3(-x2, y2, -z), new THREE.Vector3(-x2, y2,  z),
+      new THREE.Vector3( x2, y2, -z), new THREE.Vector3( x2, y2,  z),
+      // diagonals front
+      new THREE.Vector3(-x1, y1, -z), new THREE.Vector3( x2, y2, -z),
+      new THREE.Vector3( x1, y1, -z), new THREE.Vector3(-x2, y2, -z),
+      // diagonals back
+      new THREE.Vector3(-x1, y1,  z), new THREE.Vector3( x2, y2,  z),
+      new THREE.Vector3( x1, y1,  z), new THREE.Vector3(-x2, y2,  z),
+    ];
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    group.add(new THREE.LineSegments(geo, mat));
+  }
+
+  // Base legs
+  box(28, 0, 18, 20, 28);
+  // Lower body
+  box(18, 20, 10, 50, 18);
+  // First platform ring
+  const ring1pts = [];
+  for (let i = 0; i <= 32; i++) {
+    const a = (i / 32) * Math.PI * 2;
+    ring1pts.push(new THREE.Vector3(Math.cos(a) * 20, 50, Math.sin(a) * 20));
+  }
+  group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring1pts), new THREE.LineBasicMaterial({ color: 0xffff00 })));
+
+  // Mid body
+  box(10, 50, 5, 90, 10);
+  // Second platform ring
+  const ring2pts = [];
+  for (let i = 0; i <= 32; i++) {
+    const a = (i / 32) * Math.PI * 2;
+    ring2pts.push(new THREE.Vector3(Math.cos(a) * 8, 90, Math.sin(a) * 8));
+  }
+  group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring2pts), new THREE.LineBasicMaterial({ color: 0xffff00 })));
+
+  // Upper spire
+  box(5, 90, 0.5, 130, 5);
+
+  // Antenna tip
+  const antGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 130, 0), new THREE.Vector3(0, 145, 0)
+  ]);
+  group.add(new THREE.Line(antGeo, new THREE.LineBasicMaterial({ color: 0xff0000 })));
+
+  return group;
+}
+
+const tower = makeTower();
+tower.position.set(0, -10, 0);
+scene.add(tower);
+
+// ── FLOATING TORI ────────────────────────────────────────────────────────────
+const tori = [];
+const torusMats = [0xff00ff, 0x00ffff, 0xff6600, 0x00ff00];
+for (let i = 0; i < 4; i++) {
+  const geo = new THREE.TorusGeometry(8, 2, 8, 24);
+  const mat = new THREE.MeshBasicMaterial({ color: torusMats[i], wireframe: true });
+  const mesh = new THREE.Mesh(geo, mat);
+  const angle = (i / 4) * Math.PI * 2;
+  mesh.position.set(Math.cos(angle) * 70, 40 + i * 15, Math.sin(angle) * 70);
+  scene.add(mesh);
+  tori.push({ mesh, angle, speed: 0.3 + i * 0.1, orbitSpeed: 0.003 + i * 0.001 });
+}
+
+// ── PLASMA TUNNEL (sine-displaced ring) ──────────────────────────────────────
+const tunnelGroup = new THREE.Group();
+scene.add(tunnelGroup);
+const tunnelRings = [];
+for (let r = 0; r < 20; r++) {
+  const pts = [];
+  const segs = 48;
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a) * 40, Math.sin(a) * 40, r * 15 - 150));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const hue = r / 20;
+  const col = new THREE.Color().setHSL(hue, 1, 0.5);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: col }));
+  tunnelGroup.add(line);
+  tunnelRings.push({ line, r });
+}
+tunnelGroup.position.set(-120, 50, -80);
+tunnelGroup.rotation.y = 0.4;
+
+// ── FLOATING TEXT PLANES ─────────────────────────────────────────────────────
+// (canvas textures with text)
+function makeTextSprite(text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'transparent';
+  ctx.clearRect(0, 0, 256, 64);
+  ctx.font = 'bold 28px monospace';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 128, 32);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(40, 10, 1);
+  return sprite;
+}
+
+const labels = [
+  { text: 'PARIS 1997', color: '#ff00ff', pos: [-60, 70, 40] },
+  { text: 'LA BELLE ÉPOQUE', color: '#00ffff', pos: [60, 55, 30] },
+  { text: 'AMOUR', color: '#ff6600', pos: [-40, 100, -20] },
+];
+labels.forEach(({ text, color, pos }) => {
+  const s = makeTextSprite(text, color);
+  s.position.set(...pos);
+  scene.add(s);
+});
+
+// ── LIGHTS ───────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x220022));
+const pt = new THREE.PointLight(0xff66ff, 2, 300);
+pt.position.set(0, 100, 80);
+scene.add(pt);
+
+// ── ANIMATE ──────────────────────────────────────────────────────────────────
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  t += 0.016;
+
+  // Camera slow orbit
+  camera.position.x = Math.sin(t * 0.08) * 180;
+  camera.position.z = Math.cos(t * 0.08) * 180;
+  camera.position.y = 30 + Math.sin(t * 0.05) * 20;
+  camera.lookAt(0, 50, 0);
+
+  // Tower color pulse
+  const hue = (t * 0.1) % 1;
+  tower.traverse(obj => {
+    if (obj.material && obj.material.color) {
+      if (obj.material.color.getHex() !== 0xffff00 && obj.material.color.getHex() !== 0xff0000) {
+        obj.material.color.setHSL(hue, 1, 0.55);
+      }
+    }
+  });
+
+  // Tori orbit + spin
+  tori.forEach(({ mesh, orbitSpeed }, i) => {
+    const a = t * orbitSpeed * (i % 2 === 0 ? 1 : -1) + i * (Math.PI / 2);
+    mesh.position.x = Math.cos(a) * 70;
+    mesh.position.z = Math.sin(a) * 70;
+    mesh.position.y = 40 + Math.sin(t * 0.5 + i) * 15;
+    mesh.rotation.x += 0.02;
+    mesh.rotation.z += 0.015;
+    mesh.material.color.setHSL((t * 0.2 + i * 0.25) % 1, 1, 0.5);
+  });
+
+  // Plasma tunnel distortion
+  tunnelRings.forEach(({ line, r }) => {
+    const positions = line.geometry.attributes.position;
+    const segs = 48;
+    for (let i = 0; i <= segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      const wave = Math.sin(a * 3 + t * 2 + r * 0.4) * 8;
+      positions.setXY(i, Math.cos(a) * (40 + wave), Math.sin(a) * (40 + wave));
+    }
+    positions.needsUpdate = true;
+    line.material.color.setHSL((r / 20 + t * 0.1) % 1, 1, 0.5);
+  });
+
+  // Stars twinkle
+  stars.rotation.y += 0.0001;
+
+  // Grid color
+  gridHelper.material[0].color.setHSL((t * 0.05) % 1, 1, 0.4);
+
+  // Point light orbit
+  pt.position.x = Math.sin(t * 0.5) * 80;
+  pt.position.z = Math.cos(t * 0.5) * 80;
+  pt.color.setHSL((t * 0.15) % 1, 1, 0.6);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// Resize
+window.addEventListener('resize', () => {
+  const W = window.innerWidth, H = window.innerHeight - 40;
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+  renderer.setSize(W, H);
+});
+</script>
+</body>
+</html>
